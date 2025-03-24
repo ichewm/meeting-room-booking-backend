@@ -1,0 +1,54 @@
+flowchart TD
+    subgraph 用户角色
+        SU[超级管理员]
+        A[管理员]
+        E[普通用户]
+    end
+
+    subgraph 认证系统
+        Login[登录API]
+        Auth[JWT认证]
+    end
+
+    subgraph "用户管理"
+        UM[用户管理API]
+        RM[角色管理API]
+    end
+
+    subgraph "会议室管理"
+        MRM[会议室管理API]
+    end
+
+    subgraph "预订管理"
+        ResM[预订管理API]
+    end
+
+    %% 角色层级关系
+    SU -->|可管理| A
+    SU -->|可管理| E
+    A -->|可管理| E
+
+    %% 认证流程
+    SU & A & E -->|认证| Login
+    Login -->|颁发令牌| Auth
+
+    %% 用户管理权限
+    SU -->|完全访问权限| UM
+    SU -->|完全访问权限| RM
+    A -->|有限访问权限| UM
+    E -->|无访问权限| UM
+    A -->|无访问权限| RM
+
+    %% 会议室管理
+    SU & A -->|完全访问权限| MRM
+    E -->|只读权限| MRM
+
+    %% 预订管理
+    SU & A -->|完全访问权限| ResM
+    E -->|个人预订权限| ResM
+
+    %% 数据库操作
+    UM & RM & MRM & ResM -->|CRUD操作| DB[(数据库)]
+
+    %% 系统初始化
+    Init[系统初始化] -->|种子数据| SU
