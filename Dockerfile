@@ -1,37 +1,44 @@
-# 构建阶段
-FROM node:22-alpine AS build
+FROM node:22-alpine AS builder
 
+# Set the working directory inside the container
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+# Copy package.json and yarn.lock to the working directory
+COPY package*.json yarn.lock ./
 
-# 安装依赖
-RUN npm install
+# Install dependencies
+RUN yarn install --frozen-lockfile
 
-# 复制源代码
+# Copy the rest of the application code
 COPY . .
 
-# 构建应用
-RUN npm run build
+RUN npm run rebuild
 
-# 生产阶段
-FROM node:22-alpine AS production
+# Build the application
+RUN yarn build
 
+# Production stage
+FROM node:22-alpine
+
+# Create app directory
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+# Copy from build stage
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
 
-# 只安装生产环境依赖
-RUN npm install --only=production
-
-# 从构建阶段复制构建后的文件
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/src ./src
-
-# 暴露端口
+# Expose port
 EXPOSE 3001
 
+# Create non-root user
+RUN addgroup -S appuser && adduser -S appuser -G appuser
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost:3001/api/health || exit 1
+
+# Run the application
 # 启动应用
 CMD ["npm", "run", "start:prod"]

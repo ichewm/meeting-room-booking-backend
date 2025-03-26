@@ -2,32 +2,39 @@ version: '3.8'
 
 services:
   app:
+    restart: always
     build:
-      context: .
+      context: ./
       dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DB_HOST: db                     
+      DB_PORT: 3306
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "3001:3001"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_USERNAME=root
-      - DB_PASSWORD=example
-      - DB_DATABASE=meeting_room_booking
-    depends_on:
-      - db
-    security_opt:
-      - seccomp:unconfined
-    volumes:
-      - .:/app
-      - /app/node_modules
-    restart: unless-stopped
+    networks:
+      - webnet
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
 
   db:
     image: mysql:8.0
@@ -54,3 +61,7 @@ services:
 
 volumes:
   mysql_data:
+
+networks:
+  webnet:
+    driver: bridge
