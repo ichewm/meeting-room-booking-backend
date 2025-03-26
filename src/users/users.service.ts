@@ -24,8 +24,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     private configService: ConfigService,
   ) {
-    this.saltOrRounds = this.configService.get<number>(
-      'BCRYPT_SALT_ROUNDS',
+    this.saltOrRounds = parseInt(
+      this.configService.get<string>('BCRYPT_SALT_ROUNDS', '12'),
       12,
     );
   }
@@ -34,10 +34,10 @@ export class UsersService {
     return this.usersRepository.find();
   }
 
-  async findOne(username: string): Promise<User> {
+  async findOne(username: string): Promise<User | undefined> {
     const user = await this.usersRepository.findOne({ where: { username } });
     if (!user) {
-      throw new NotFoundException(`未找到用户 ${username}`);
+      return undefined;
     }
     return user;
   }

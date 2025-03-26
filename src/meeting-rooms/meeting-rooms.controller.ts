@@ -31,7 +31,7 @@ export class MeetingRoomsController {
     return this.meetingRoomsService.create(createMeetingRoomDto);
   }
 
-  @Roles(Role.Admin, Role.Employee)
+  @Roles(Role.Admin, Role.SuperAdmin)
   @Get()
   findAll(
     @Query('page', new ParseIntPipe({ optional: true })) page = 1,

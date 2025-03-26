@@ -1,318 +1,463 @@
-会议室预订系统 API 文档
+# Meeting Room Booking System API 文档
 
-概述
-此 API 服务于会议室预订系统，允许用户管理会议室、预订和用户账户，并根据不同权限级别进行操作。所有接口均需通过 JWT 令牌进行身份验证，接口路径以 /api 为全局前缀。
+## 基础信息
+- 基础URL: http://localhost:3001/api
+- 所有需要认证的接口都需要在请求头中携带 JWT Token
+- 认证方式: Bearer Token
 
----
+## 统一响应格式
 
-认证
+### 成功响应
+```json
+{
+    "data": {
+        // 实际响应数据
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-登录
-- 端点: POST /api/auth/login
-- 描述: 用户登录并获取 JWT 令牌。
-- 请求体:
-  {
-    "username": "string",  // 用户名，必填
-    "password": "string"   // 密码，必填
-  }
-- 响应:
-  {
-    "accessToken": "jwt_token",  // JWT 令牌
-    "user": {
-      "id": 1,                  // 用户 ID
-      "username": "admin",      // 用户名
-      "email": "admin@example.com", // 邮箱
-      "role": "admin"           // 角色
+### 错误响应
+```json
+{
+    "status": "error",
+    "timestamp": "2025-03-26T14:11:17.850Z",
+    "message": {
+        "message": "错误信息",
+        "error": "错误类型",
+        "statusCode": 400
     }
-  }
-- 请求用例:
-  curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "Admin123"}'
+}
+```
 
----
+## 认证相关
 
-用户管理
+### 登录 (POST /auth/login)
+请求体:
+```json
+{
+    "username": "string",
+    "password": "string"
+}
+```
 
-获取所有用户
-- 端点: GET /api/users
-- 描述: 获取所有用户列表。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 响应: 用户对象数组
-  [
-    {"id": 1, "username": "admin", "email": "admin@example.com", "role": "admin"},
-    {"id": 2, "username": "user1", "email": "user1@example.com", "role": "employee"}
-  ]
-- 请求用例:
-  curl -X GET http://localhost:3000/api/users \
-  -H "Authorization: Bearer <jwt_token>"
+成功响应 (200):
+```json
+{
+    "data": {
+        "access_token": "string"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-获取特定用户
-- 端点: GET /api/users/:id
-- 描述: 根据 ID 获取用户信息。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 响应: 用户对象
-  {"id": 1, "username": "admin", "email": "admin@example.com", "role": "admin"}
-- 请求用例:
-  curl -X GET http://localhost:3000/api/users/1 \
-  -H "Authorization: Bearer <jwt_token>"
+错误响应:
+- 401: 认证失败
+- 400: 请求参数错误
 
-创建用户
-- 端点: POST /api/users
-- 描述: 创建新用户，默认角色为 employee。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "username": "newuser",       // 用户名，必填
-    "password": "Password123",   // 密码，必填
-    "email": "newuser@example.com" // 邮箱，必填
-  }
-- 响应: 新创建的用户对象
-  {"id": 3, "username": "newuser", "email": "newuser@example.com", "role": "employee"}
-- 请求用例:
-  curl -X POST http://localhost:3000/api/users \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "newuser", "password": "Password123", "email": "newuser@example.com"}'
+### 注册 (POST /auth/register)
+请求体:
+```json
+{
+    "username": "string",
+    "password": "string",
+    "email": "string"
+}
+```
 
-更新用户
-- 端点: PATCH /api/users/:id
-- 描述: 更新用户信息，仅限有权限的用户操作。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "username": "updateduser",    // 用户名，可选
-    "email": "updated@example.com" // 邮箱，可选
-  }
-- 响应: 更新后的用户对象
-  {"id": 1, "username": "updateduser", "email": "updated@example.com", "role": "admin"}
-- 请求用例:
-  curl -X PATCH http://localhost:3000/api/users/1 \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "updateduser", "email": "updated@example.com"}'
+成功响应 (201):
+```json
+{
+    "data": {
+        "id": 0,
+        "username": "string",
+        "email": "string",
+        "role": "employee",
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-删除用户
-- 端点: DELETE /api/users/:id
-- 描述: 删除用户。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 注意:
-  - SuperAdmin 用户不可删除。
-  - 仅 SuperAdmin 可删除 Admin 用户。
-- 请求用例:
-  curl -X DELETE http://localhost:3000/api/users/2 \
-  -H "Authorization: Bearer <jwt_token>"
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
 
-获取当前用户角色和权限
-- 端点: GET /api/users/me/roles
-- 描述: 获取当前用户的角色和权限。
-- 授权: JWT Bearer Token
-- 响应:
-  {
-    "role": "admin",
-    "permissions": {
-      "canManageAdmins": false,  // 是否可管理管理员
-      "canManageUsers": true     // 是否可管理用户
-    }
-  }
-- 请求用例:
-  curl -X GET http://localhost:3000/api/users/me/roles \
-  -H "Authorization: Bearer <jwt_token>"
+## 用户管理
 
----
+### 获取所有用户 (GET /users)
+需要角色: Admin, SuperAdmin
 
-角色管理
+成功响应 (200):
+```json
+{
+    "data": [
+        {
+            "id": 0,
+            "username": "string",
+            "email": "string",
+            "role": "employee",
+            "createdAt": "2025-03-26T14:11:17.850Z",
+            "updatedAt": "2025-03-26T14:11:17.850Z"
+        }
+    ],
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-设置用户角色
-- 端点: PATCH /api/users/:id/role
-- 描述: 修改用户角色。
-- 所需角色: SuperAdmin
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "role": "admin" // 可选值为 "employee", "admin", "superAdmin"
-  }
-- 响应: 更新后的用户对象
-  {"id": 2, "username": "user1", "email": "user1@example.com", "role": "admin"}
-- 权限:
-  - 仅 SuperAdmin 可分配 SuperAdmin 角色。
-  - 仅 SuperAdmin 可修改 Admin 角色。
-  - Admin 用户不可创建其他 Admin 用户。
-- 请求用例:
-  curl -X PATCH http://localhost:3000/api/users/2/role \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"role": "admin"}'
+错误响应:
+- 401: 未授权
+- 403: 权限不足
 
-移除管理员角色
-- 端点: DELETE /api/users/:id/admin-role
-- 描述: 移除用户的管理员角色，将其降级为普通员工。
-- 所需角色: SuperAdmin
-- 授权: JWT Bearer Token
-- 响应: 更新后的用户对象
-  {"id": 2, "username": "user1", "email": "user1@example.com", "role": "employee"}
-- 权限: 仅 SuperAdmin 可操作。
-- 请求用例:
-  curl -X DELETE http://localhost:3000/api/users/2/admin-role \
-  -H "Authorization: Bearer <jwt_token>"
+### 创建用户 (POST /users)
+需要角色: Admin, SuperAdmin
 
----
+请求体:
+```json
+{
+    "username": "string",
+    "password": "string",
+    "email": "string"
+}
+```
 
-会议室管理
+成功响应 (201):
+```json
+{
+    "data": {
+        "id": 0,
+        "username": "string",
+        "email": "string",
+        "role": "employee",
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-获取所有会议室
-- 端点: GET /api/meeting-rooms
-- 描述: 获取所有会议室列表。
-- 授权: JWT Bearer Token
-- 响应: 会议室对象数组
-  [
-    {"id": 1, "name": "Room A", "capacity": 10, "location": "Floor 1", "status": "available"}
-  ]
-- 请求用例:
-  curl -X GET http://localhost:3000/api/meeting-rooms \
-  -H "Authorization: Bearer <jwt_token>"
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
 
-获取特定会议室
-- 端点: GET /api/meeting-rooms/:id
-- 描述: 根据 ID 获取会议室信息。
-- 授权: JWT Bearer Token
-- 响应: 会议室对象
-  {"id": 1, "name": "Room A", "capacity": 10, "location": "Floor 1", "status": "available"}
-- 请求用例:
-  curl -X GET http://localhost:3000/api/meeting-rooms/1 \
-  -H "Authorization: Bearer <jwt_token>"
+### 更新用户 (PATCH /users/{id})
+需要角色: Admin, SuperAdmin
 
-创建会议室
-- 端点: POST /api/meeting-rooms
-- 描述: 创建新会议室。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "name": "Room B",     // 必填
-    "capacity": 20,       // 必填
-    "location": "Floor 2", // 必填
-    "description": "With projector" // 可选
-  }
-- 响应: 新创建的会议室对象
-  {"id": 2, "name": "Room B", "capacity": 20, "location": "Floor 2", "description": "With projector", "status": "available"}
-- 请求用例:
-  curl -X POST http://localhost:3000/api/meeting-rooms \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Room B", "capacity": 20, "location": "Floor 2", "description": "With projector"}'
+请求体:
+```json
+{
+    "username": "string",
+    "email": "string"
+}
+```
 
-更新会议室
-- 端点: PATCH /api/meeting-rooms/:id
-- 描述: 更新会议室信息。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "name": "Room B Updated", // 可选
-    "capacity": 25           // 可选
-  }
-- 响应: 更新后的会议室对象
-  {"id": 2, "name": "Room B Updated", "capacity": 25, "location": "Floor 2", "description": "With projector", "status": "available"}
-- 请求用例:
-  curl -X PATCH http://localhost:3000/api/meeting-rooms/2 \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Room B Updated", "capacity": 25}'
+成功响应 (200):
+```json
+{
+    "data": {
+        "id": 0,
+        "username": "string",
+        "email": "string",
+        "role": "employee",
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-删除会议室
-- 端点: DELETE /api/meeting-rooms/:id
-- 描述: 删除会议室。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 请求用例:
-  curl -X DELETE http://localhost:3000/api/meeting-rooms/2 \
-  -H "Authorization: Bearer <jwt_token>"
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
 
----
+### 修改密码 (PATCH /users/{id}/password)
+需要角色: Admin, SuperAdmin
 
-预订管理
+请求体:
+```json
+{
+    "oldPassword": "string",
+    "newPassword": "string"
+}
+```
 
-获取所有预订
-- 端点: GET /api/reservations
-- 描述: 获取所有预订列表。
-- 所需角色: Admin, SuperAdmin
-- 授权: JWT Bearer Token
-- 响应: 预订对象数组
-  [
-    {"id": 1, "title": "Team Meeting", "startTime": "2025-03-26T09:00:00Z", "endTime": "2025-03-26T10:00:00Z", "roomId": 1}
-  ]
-- 请求用例:
-  curl -X GET http://localhost:3000/api/reservations \
-  -H "Authorization: Bearer <jwt_token>"
+成功响应 (200):
+```json
+{
+    "data": {
+        "message": "密码修改成功"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-获取用户预订
-- 端点: GET /api/reservations/user
-- 描述: 获取当前用户的预订。
-- 授权: JWT Bearer Token
-- 响应: 预订对象数组
-  [
-    {"id": 1, "title": "Team Meeting", "startTime": "2025-03-26T09:00:00Z", "endTime": "2025-03-26T10:00:00Z", "roomId": 1}
-  ]
-- 请求用例:
-  curl -X GET http://localhost:3000/api/reservations/user \
-  -H "Authorization: Bearer <jwt_token>"
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+- 400: 旧密码错误
 
-获取特定预订
-- 端点: GET /api/reservations/:id
-- 描述: 根据 ID 获取预订信息。
-- 授权: JWT Bearer Token
-- 响应: 预订对象
-  {"id": 1, "title": "Team Meeting", "startTime": "2025-03-26T09:00:00Z", "endTime": "2025-03-26T10:00:00Z", "roomId": 1}
-- 请求用例:
-  curl -X GET http://localhost:3000/api/reservations/1 \
-  -H "Authorization: Bearer <jwt_token>"
+### 删除用户 (DELETE /users/{id})
+需要角色: Admin, SuperAdmin
 
-创建预订
-- 端点: POST /api/reservations
-- 描述: 创建新预订。
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "title": "Team Meeting",  // 必填
-    "startTime": "2025-03-26T09:00:00Z", // 必填
-    "endTime": "2025-03-26T10:00:00Z",   // 必填
-    "roomId": 1              // 必填
-  }
-- 响应: 新创建的预订对象
-  {"id": 1, "title": "Team Meeting", "startTime": "2025-03-26T09:00:00Z", "endTime": "2025-03-26T10:00:00Z", "roomId": 1}
-- 请求用例:
-  curl -X POST http://localhost:3000/api/reservations \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Team Meeting", "startTime": "2025-03-26T09:00:00Z", "endTime": "2025-03-26T10:00:00Z", "roomId": 1}'
+成功响应 (204):
+```json
+{
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
 
-更新预订
-- 端点: PATCH /api/reservations/:id
-- 描述: 更新预订信息。
-- 授权: JWT Bearer Token
-- 请求体:
-  {
-    "startTime": "2025-03-26T10:00:00Z", // 可选
-    "endTime": "2025-03-26T11:00:00Z"   // 可选
-  }
-- 响应: 更新后的预订对象
-  {"id": 1, "title": "Team Meeting", "startTime": "2025-03-26T10:00:00Z", "endTime": "2025-03-26T11:00:00Z", "roomId": 1}
-- 请求用例:
-  curl -X PATCH http://localhost:3000/api/reservations/1 \
-  -H "Authorization: Bearer <jwt_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"startTime": "2025-03-26T10:00:00Z", "endTime": "2025-03-26T11:00:00Z"}'
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
 
-删除预订
-- 端点: DELETE /api/reservations/:id
-- 描述: 删除预订。
-- 授权: JWT Bearer Token
-- 请求用例:
-  curl -X DELETE http://localhost:3000/api/reservations/1 \
-  -H "Authorization: Bearer <jwt_token>"
+## 会议室管理
+
+### 获取所有会议室 (GET /rooms)
+查询参数:
+- page: 页码 (默认: 1)
+- limit: 每页数量 (默认: 10)
+- status: 会议室状态 (可选)
+
+成功响应 (200):
+```json
+{
+    "data": {
+        "items": [
+            {
+                "id": 0,
+                "name": "string",
+                "capacity": 0,
+                "location": "string",
+                "description": "string",
+                "status": "available",
+                "isActive": true,
+                "createdAt": "2025-03-26T14:11:17.850Z",
+                "updatedAt": "2025-03-26T14:11:17.850Z"
+            }
+        ],
+        "meta": {
+            "total": 0,
+            "page": 0,
+            "limit": 0,
+            "totalPages": 0
+        }
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 400: 请求参数错误
+
+### 创建会议室 (POST /rooms)
+需要角色: Admin, SuperAdmin
+
+请求体:
+```json
+{
+    "name": "string",
+    "capacity": 0,
+    "location": "string",
+    "description": "string"
+}
+```
+
+成功响应 (201):
+```json
+{
+    "data": {
+        "id": 0,
+        "name": "string",
+        "capacity": 0,
+        "location": "string",
+        "description": "string",
+        "status": "available",
+        "isActive": true,
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+
+### 更新会议室 (PATCH /rooms/{id})
+需要角色: Admin, SuperAdmin
+
+请求体:
+```json
+{
+    "name": "string",
+    "capacity": 0,
+    "location": "string",
+    "description": "string",
+    "status": "available",
+    "isActive": true
+}
+```
+
+成功响应 (200):
+```json
+{
+    "data": {
+        "id": 0,
+        "name": "string",
+        "capacity": 0,
+        "location": "string",
+        "description": "string",
+        "status": "available",
+        "isActive": true,
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+
+### 删除会议室 (DELETE /rooms/{id})
+需要角色: Admin, SuperAdmin
+
+成功响应 (204):
+```json
+{
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+
+### 更新会议室状态 (PATCH /rooms/{id}/status)
+需要角色: Admin, SuperAdmin
+
+请求体:
+```json
+{
+    "status": "available"
+}
+```
+
+成功响应 (200):
+```json
+{
+    "data": {
+        "id": 0,
+        "name": "string",
+        "capacity": 0,
+        "location": "string",
+        "description": "string",
+        "status": "available",
+        "isActive": true,
+        "createdAt": "2025-03-26T14:11:17.850Z",
+        "updatedAt": "2025-03-26T14:11:17.850Z"
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+- 400: 无效的状态值
+
+## 预订管理
+
+### 创建预订 (POST /reservations)
+请求体:
+```json
+{
+    "title": "string",
+    "startTime": "2025-03-26T14:11:17.850Z",
+    "endTime": "2025-03-26T14:11:17.850Z",
+    "roomId": 0
+}
+```
+
+成功响应 (201):
+```json
+{
+    "data": {
+        "id": 0,
+        "title": "string",
+        "startTime": "2025-03-26T14:11:17.850Z",
+        "endTime": "2025-03-26T14:11:17.850Z",
+        "roomId": 0,
+        "userId": 0
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 400: 请求参数错误
+- 409: 资源冲突
+
+### 获取当前用户的预订 (GET /reservations/user)
+成功响应 (200):
+```json
+{
+    "data": [
+        {
+            "id": 0,
+            "title": "string",
+            "startTime": "2025-03-26T14:11:17.850Z",
+            "endTime": "2025-03-26T14:11:17.850Z",
+            "roomId": 0,
+            "userId": 0
+        }
+    ],
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+
+### 删除预订 (DELETE /reservations/{id})
+成功响应 (204):
+```json
+{
+    "status": "success",
+    "timestamp": "2025-03-26T14:11:17.850Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在

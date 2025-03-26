@@ -25,6 +25,7 @@ export class AuthService {
       this.logger.warn(`用户 ${username} 密码错误`);
       return null;
     }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...result } = user;
     return result;
   }
@@ -46,8 +47,8 @@ export class AuthService {
     if (existingUser) {
       throw new BadRequestException('用户名已存在');
     }
-    const saltOrRounds = this.configService.get<number>(
-      'BCRYPT_SALT_ROUNDS',
+    const saltOrRounds = parseInt(
+      this.configService.get<string>('BCRYPT_SALT_ROUNDS', '12'),
       12,
     );
     const hash = await bcrypt.hash(userDto.password, saltOrRounds);

@@ -1,5 +1,6 @@
 认证
 - POST /api/auth/login
+- POST /api/auth/register
 
 用户管理
 - GET /api/users
@@ -14,11 +15,13 @@
 - DELETE /api/users/:id/admin-role
 
 会议室管理
-- GET /api/meeting-rooms
-- GET /api/meeting-rooms/:id
-- POST /api/meeting-rooms
-- PATCH /api/meeting-rooms/:id
-- DELETE /api/meeting-rooms/:id
+- GET /api/rooms
+- GET /api/rooms/available
+- GET /api/rooms/:id
+- POST /api/rooms
+- PATCH /api/rooms/:id
+- PATCH /api/rooms/:id/status
+- DELETE /api/rooms/:id
 
 预订管理
 - GET /api/reservations
