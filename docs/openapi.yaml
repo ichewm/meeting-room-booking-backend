@@ -99,17 +99,47 @@ components:
           type: integer
         title:
           type: string
+        description:
+          type: string
         startTime:
           type: string
           format: date-time
         endTime:
           type: string
           format: date-time
-        roomId:
-          type: integer
         userId:
           type: integer
-      required: [title, startTime, endTime, roomId]
+        roomId:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        room:
+          $ref: '#/components/schemas/MeetingRoom'
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            password:
+              type: string
+            email:
+              type: string
+            role:
+              type: string
+              enum: [employee, admin, superAdmin]
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+          required: [username, email]
     Error:
       type: object
       properties:
@@ -160,6 +190,18 @@ components:
         description:
           type: string
       required: [name, capacity, location, description]
+    UpdateReservationRequest:
+      type: object
+      properties:
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        description:
+          type: string
+      required: [startTime, endTime, description]
 paths:
   /auth/login:
     post:
@@ -390,89 +432,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     patch:
-      summary: 更新用户信息
-      description: 更新用户信息，仅限有权限的用户操作
+      summary: 更新用户
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
+        - in: path
+          name: id
           required: true
           schema:
             type: integer
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateUserRequest'
       responses:
         '200':
-          description: 用户信息更新成功
+          description: 更新后的用户
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Response'
-                properties:
-                  data:
-                    $ref: '#/components/schemas/User'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-
-  /users/{id}/password:
-    patch:
-      summary: 修改用户密码
-      description: 用户修改自己的密码，需要验证旧密码
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                oldPassword:
-                  type: string
-                  description: 旧密码
-                newPassword:
-                  type: string
-                  description: 新密码
-              required:
-                - oldPassword
-                - newPassword
-      responses:
-        '200':
-          description: 密码修改成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Response'
-                properties:
-                  data:
-                    type: object
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
                     properties:
-                      message:
-                        type: string
-                        example: "密码修改成功"
+                      data:
+                        $ref: '#/components/schemas/User'
         '401':
-          $ref: '#/components/responses/UnauthorizedError'
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
-          $ref: '#/components/responses/ForbiddenError'
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          $ref: '#/components/responses/NotFoundError'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
+          description: 资源不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       summary: 删除用户
       security:
@@ -1079,7 +1082,33 @@ paths:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Reservation'
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            title:
+                              type: string
+                            description:
+                              type: string
+                            startTime:
+                              type: string
+                              format: date-time
+                            endTime:
+                              type: string
+                              format: date-time
+                            userId:
+                              type: integer
+                            roomId:
+                              type: integer
+                            createdAt:
+                              type: string
+                              format: date-time
+                            updatedAt:
+                              type: string
+                              format: date-time
+                            room:
+                              $ref: '#/components/schemas/MeetingRoom'
+                          required: [title, startTime, endTime, roomId]
         '401':
           description: 未授权
           content:
@@ -1135,7 +1164,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Reservation'
+              $ref: '#/components/schemas/UpdateReservationRequest'
       responses:
         '200':
           description: 更新后的预订

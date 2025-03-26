@@ -432,16 +432,30 @@
 {
     "data": [
         {
-            "id": 0,
-            "title": "string",
-            "startTime": "2025-03-26T14:11:17.850Z",
-            "endTime": "2025-03-26T14:11:17.850Z",
-            "roomId": 0,
-            "userId": 0
+            "id": 1,
+            "title": "研究赚钱",
+            "description": "更新后的会议目的",
+            "startTime": "2023-06-15T09:30:00.000Z",
+            "endTime": "2023-06-15T10:30:00.000Z",
+            "userId": 1,
+            "roomId": 1,
+            "createdAt": "2025-03-24T05:23:00.181Z",
+            "updatedAt": "2025-03-24T05:25:40.000Z",
+            "room": {
+                "id": 1,
+                "name": "大会议室",
+                "capacity": 20,
+                "location": "一楼左侧101",
+                "description": "投影仪,黑板,通话系统,插板",
+                "status": "available",
+                "isActive": true,
+                "createdAt": "2025-03-21T09:36:48.490Z",
+                "updatedAt": "2025-03-21T09:36:48.490Z"
+            }
         }
     ],
     "status": "success",
-    "timestamp": "2025-03-26T14:11:17.850Z"
+    "timestamp": "2025-03-26T07:13:03.799Z"
 }
 ```
 
@@ -461,3 +475,148 @@
 - 401: 未授权
 - 403: 权限不足
 - 404: 资源不存在
+
+### 获取所有预订 (GET /reservations)
+成功响应 (200):
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "title": "研究赚钱",
+            "description": "更新后的会议目的",
+            "startTime": "2023-06-15T09:30:00.000Z",
+            "endTime": "2023-06-15T10:30:00.000Z",
+            "userId": 1,
+            "roomId": 1,
+            "createdAt": "2025-03-24T05:23:00.181Z",
+            "updatedAt": "2025-03-24T05:25:40.000Z",
+            "room": {
+                "id": 1,
+                "name": "大会议室",
+                "capacity": 20,
+                "location": "一楼左侧101",
+                "description": "投影仪,黑板,通话系统,插板",
+                "status": "available",
+                "isActive": true,
+                "createdAt": "2025-03-21T09:36:48.490Z",
+                "updatedAt": "2025-03-21T09:36:48.490Z"
+            },
+            "user": {
+                "id": 1,
+                "username": "superadmin",
+                "password": "$2b$10$OlpoJkwPhfQxyK85mu/StuJmiBd0rGipiLTnyFld3Phja3gzsiz2.",
+                "email": "superadmin@example.com",
+                "role": "superadmin",
+                "createdAt": "2025-03-21T08:08:11.699Z",
+                "updatedAt": "2025-03-21T08:08:11.699Z"
+            }
+        }
+    ],
+    "status": "success",
+    "timestamp": "2025-03-26T07:13:03.799Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+
+### 获取特定预订 (GET /reservations/{id})
+成功响应 (200):
+```json
+{
+    "data": {
+        "id": 1,
+        "title": "研究赚钱",
+        "description": "更新后的会议目的",
+        "startTime": "2023-06-15T09:30:00.000Z",
+        "endTime": "2023-06-15T10:30:00.000Z",
+        "userId": 1,
+        "roomId": 1,
+        "createdAt": "2025-03-24T05:23:00.181Z",
+        "updatedAt": "2025-03-24T05:25:40.000Z",
+        "room": {
+            "id": 1,
+            "name": "大会议室",
+            "capacity": 20,
+            "location": "一楼左侧101",
+            "description": "投影仪,黑板,通话系统,插板",
+            "status": "available",
+            "isActive": true,
+            "createdAt": "2025-03-21T09:36:48.490Z",
+            "updatedAt": "2025-03-21T09:36:48.490Z"
+        },
+        "user": {
+            "id": 1,
+            "username": "superadmin",
+            "password": "$2b$10$OlpoJkwPhfQxyK85mu/StuJmiBd0rGipiLTnyFld3Phja3gzsiz2.",
+            "email": "superadmin@example.com",
+            "role": "superadmin",
+            "createdAt": "2025-03-21T08:08:11.699Z",
+            "updatedAt": "2025-03-21T08:08:11.699Z"
+        }
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T07:31:48.671Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 404: 资源不存在
+
+### 更新预订 (PATCH /reservations/{id})
+请求体:
+```json
+{
+    "startTime": "2023-06-15T09:30:00Z",
+    "endTime": "2023-06-15T10:30:00Z",
+    "description": "更新后的会议目的"
+}
+```
+
+成功响应 (200):
+```json
+{
+    "data": {
+        "id": 1,
+        "title": "研究赚钱",
+        "description": "更新后的会议目的",
+        "startTime": "2023-06-15T09:30:00.000Z",
+        "endTime": "2023-06-15T10:30:00.000Z",
+        "userId": 1,
+        "roomId": 1,
+        "createdAt": "2025-03-24T05:23:00.181Z",
+        "updatedAt": "2025-03-24T05:25:40.000Z",
+        "room": {
+            "id": 1,
+            "name": "大会议室",
+            "capacity": 20,
+            "location": "一楼左侧101",
+            "description": "投影仪,黑板,通话系统,插板",
+            "status": "available",
+            "isActive": true,
+            "createdAt": "2025-03-21T09:36:48.490Z",
+            "updatedAt": "2025-03-21T09:36:48.490Z"
+        },
+        "user": {
+            "id": 1,
+            "username": "superadmin",
+            "password": "$2b$10$OlpoJkwPhfQxyK85mu/StuJmiBd0rGipiLTnyFld3Phja3gzsiz2.",
+            "email": "superadmin@example.com",
+            "role": "superadmin",
+            "createdAt": "2025-03-21T08:08:11.699Z",
+            "updatedAt": "2025-03-21T08:08:11.699Z"
+        }
+    },
+    "status": "success",
+    "timestamp": "2025-03-26T07:31:48.671Z"
+}
+```
+
+错误响应:
+- 401: 未授权
+- 403: 权限不足
+- 404: 资源不存在
+- 409: 资源冲突
