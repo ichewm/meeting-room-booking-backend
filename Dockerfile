@@ -28,6 +28,7 @@ RUN npm install --only=production
 
 # 从构建阶段复制构建后的文件
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/src ./src
 
 # 暴露端口
 EXPOSE 3001
