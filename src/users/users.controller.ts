@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -43,54 +44,62 @@ export class UsersController {
 
   @Get(':id')
   @Roles(Role.Admin, Role.SuperAdmin)
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOneId(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.findOneId(id);
   }
 
   @Patch(':id')
   @Roles(Role.Admin, Role.SuperAdmin)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    // Prevent non-SuperAdmin users from modifying SuperAdmin or Admin users
-    return this.usersService.update(+id, updateUserDto);
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateUserDto: UpdateUserDto,
+    @Request() req,
+  ) {
+    const targetUser = await this.usersService.findOneId(id);
+    const currentUser = await this.usersService.findOneId(req.user.id);
+
+    if (
+      targetUser.role === Role.SuperAdmin ||
+      (targetUser.role === Role.Admin && currentUser.role !== Role.SuperAdmin)
+    ) {
+      throw new ForbiddenException('无权修改超级管理员或管理员用户');
+    }
+
+    return this.usersService.update(id, updateUserDto);
   }
 
   @Delete(':id')
   @Roles(Role.Admin, Role.SuperAdmin)
-  async remove(@Param('id') id: string, @Request() req) {
-    const targetUser = await this.usersService.findOneId(+id);
+  async remove(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    const targetUser = await this.usersService.findOneId(id);
     const currentUser = await this.usersService.findOneId(req.user.id);
 
-    // Prevent deleting SuperAdmin users
     if (targetUser.role === Role.SuperAdmin) {
-      throw new ForbiddenException('SuperAdmin users cannot be deleted');
+      throw new ForbiddenException('无法删除超级管理员用户');
     }
-
-    // Only SuperAdmin can delete Admin users
     if (
       targetUser.role === Role.Admin &&
       currentUser.role !== Role.SuperAdmin
     ) {
-      throw new ForbiddenException('Only SuperAdmin can delete Admin users');
+      throw new ForbiddenException('只有超级管理员可以删除管理员用户');
     }
 
-    return this.usersService.remove(+id);
+    return this.usersService.remove(id);
   }
-
-  // Role management endpoints
 
   @Patch(':id/role')
   @Roles(Role.SuperAdmin)
   setUserRole(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() setRoleDto: SetRoleDto,
     @Request() req,
   ) {
-    return this.usersService.setUserRole(req.user.id, +id, setRoleDto.role);
+    return this.usersService.setUserRole(req.user.id, id, setRoleDto.role);
   }
 
   @Delete(':id/admin-role')
   @Roles(Role.SuperAdmin)
-  removeAdminRole(@Param('id') id: string, @Request() req) {
-    return this.usersService.removeAdminRole(req.user.id, +id);
+  removeAdminRole(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.usersService.removeAdminRole(req.user.id, id);
   }
 }

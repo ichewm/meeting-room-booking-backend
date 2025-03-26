@@ -4,18 +4,27 @@ import {
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, QueryRunner } from 'typeorm';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { Reservation } from './entities/reservation.entity';
+import {
+  MeetingRoom,
+  MeetingRoomStatus,
+} from '../meeting-rooms/entities/meeting-room.entity';
 
 @Injectable()
 export class ReservationsService {
+  private readonly logger = new Logger(ReservationsService.name);
+
   constructor(
     @InjectRepository(Reservation)
     private reservationsRepository: Repository<Reservation>,
+    @InjectRepository(MeetingRoom)
+    private meetingRoomRepository: Repository<MeetingRoom>,
   ) {}
 
   async create(createReservationDto: CreateReservationDto, userId: number) {
@@ -23,52 +32,71 @@ export class ReservationsService {
     const endTime = new Date(createReservationDto.endTime);
     const currentTime = new Date();
 
-    // Validation 1: Check if end time is not before current time
     if (endTime <= currentTime) {
-      throw new BadRequestException(
-        'The reservation end time cannot be earlier than the current time',
-      );
+      throw new BadRequestException('预订结束时间不能早于当前时间');
     }
 
-    // Validation 2: Check if start time is before end time
-    if (startTime >= endTime) {
-      throw new BadRequestException(
-        'The reservation start time must be before the end time',
+    // 创建事务管理器
+    const queryRunner =
+      this.reservationsRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 在事务中检查冲突
+      await this.checkForOverlappingReservations(
+        createReservationDto.roomId,
+        startTime,
+        endTime,
+        queryRunner,
       );
+
+      // 创建并保存预订
+      const reservation = this.reservationsRepository.create({
+        ...createReservationDto,
+        userId,
+        startTime,
+        endTime,
+      });
+
+      const savedReservation = await queryRunner.manager.save(reservation);
+
+      // 更新会议室状态
+      const room = await queryRunner.manager.findOneOrFail(MeetingRoom, {
+        where: { id: createReservationDto.roomId },
+      });
+      room.status = MeetingRoomStatus.OCCUPIED;
+      await queryRunner.manager.save(room);
+      // 提交事务
+      await queryRunner.commitTransaction();
+      this.logger.log(`用户 ${userId} 创建预订 ${savedReservation.id} 成功`);
+      return savedReservation;
+    } catch (error) {
+      // 回滚事务
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`创建预订失败: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      // 释放事务资源
+      await queryRunner.release();
     }
-
-    // Validation 4: Check for overlapping reservations
-    await this.checkForOverlappingReservations(
-      createReservationDto.roomId,
-      startTime,
-      endTime,
-    );
-
-    const reservation = this.reservationsRepository.create({
-      ...createReservationDto,
-      userId,
-      startTime,
-      endTime,
-    });
-    return this.reservationsRepository.save(reservation);
   }
 
   private async checkForOverlappingReservations(
     roomId: number,
     startTime: Date,
     endTime: Date,
+    queryRunner: QueryRunner,
     excludeReservationId?: number,
   ) {
-    // Find any reservations that overlap with the requested time period
-    const queryBuilder = this.reservationsRepository
-      .createQueryBuilder('reservation')
+    const queryBuilder = queryRunner.manager
+      .createQueryBuilder(Reservation, 'reservation')
       .where('reservation.roomId = :roomId', { roomId })
       .andWhere(
         '(reservation.startTime < :endTime AND reservation.endTime > :startTime)',
         { startTime, endTime },
       );
 
-    // Exclude the current reservation if updating
     if (excludeReservationId) {
       queryBuilder.andWhere('reservation.id != :id', {
         id: excludeReservationId,
@@ -76,34 +104,24 @@ export class ReservationsService {
     }
 
     const overlappingReservations = await queryBuilder.getMany();
-
     if (overlappingReservations.length > 0) {
-      throw new ConflictException(
-        'The room is already reserved for the selected time period',
-      );
+      throw new ConflictException('该时间段内会议室已被预订');
     }
   }
 
-  findAll() {
+  async findAll() {
     return this.reservationsRepository.find({
       relations: ['room', 'user'],
-      order: {
-        startTime: 'DESC',
-      },
+      order: { startTime: 'DESC' },
     });
   }
 
   async findByUserId(userId: number) {
-    // Find all reservations for a specific user
-    const reservations = await this.reservationsRepository.find({
+    return this.reservationsRepository.find({
       where: { userId },
-      relations: ['room'], // Include room details
-      order: {
-        startTime: 'DESC', // Order by start time descending (newest first)
-      },
+      relations: ['room'],
+      order: { startTime: 'DESC' },
     });
-
-    return reservations;
   }
 
   async findOne(id: number) {
@@ -111,11 +129,9 @@ export class ReservationsService {
       where: { id },
       relations: ['room', 'user'],
     });
-
     if (!reservation) {
-      throw new NotFoundException(`Reservation with ID ${id} not found`);
+      throw new NotFoundException(`未找到 ID 为 ${id} 的预订`);
     }
-
     return reservation;
   }
 
@@ -125,68 +141,64 @@ export class ReservationsService {
     userId: number,
   ) {
     const reservation = await this.findOne(id);
-
-    // Check if the reservation belongs to the user
     if (reservation.userId !== userId) {
-      throw new ForbiddenException(
-        'You are not authorized to update this reservation',
-      );
+      throw new ForbiddenException('您无权更新此预订');
     }
 
-    // If updating times or room, perform validations
-    if (
-      updateReservationDto.startTime ||
-      updateReservationDto.endTime ||
-      updateReservationDto.roomId
-    ) {
-      const startTime = updateReservationDto.startTime
-        ? new Date(updateReservationDto.startTime)
-        : reservation.startTime;
+    const queryRunner =
+      this.reservationsRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-      const endTime = updateReservationDto.endTime
-        ? new Date(updateReservationDto.endTime)
-        : reservation.endTime;
+    try {
+      if (
+        updateReservationDto.startTime ||
+        updateReservationDto.endTime ||
+        updateReservationDto.roomId
+      ) {
+        const startTime = updateReservationDto.startTime
+          ? new Date(updateReservationDto.startTime)
+          : reservation.startTime;
+        const endTime = updateReservationDto.endTime
+          ? new Date(updateReservationDto.endTime)
+          : reservation.endTime;
+        const roomId = updateReservationDto.roomId || reservation.roomId;
+        const currentTime = new Date();
 
-      const roomId = updateReservationDto.roomId || reservation.roomId;
-      const currentTime = new Date();
+        if (endTime <= currentTime) {
+          throw new BadRequestException('预订结束时间不能早于当前时间');
+        }
 
-      // Validation 1: Check if end time is not before current time
-      if (endTime <= currentTime) {
-        throw new BadRequestException(
-          'The reservation end time cannot be earlier than the current time',
+        await this.checkForOverlappingReservations(
+          roomId,
+          startTime,
+          endTime,
+          queryRunner,
+          id,
         );
       }
 
-      // Validation 2: Check if start time is before end time
-      if (startTime >= endTime) {
-        throw new BadRequestException(
-          'The reservation start time must be before the end time',
-        );
-      }
-
-      // Validation 4: Check for overlapping reservations (excluding current reservation)
-      await this.checkForOverlappingReservations(
-        roomId,
-        startTime,
-        endTime,
-        id,
-      );
+      Object.assign(reservation, updateReservationDto);
+      const updatedReservation = await queryRunner.manager.save(reservation);
+      await queryRunner.commitTransaction();
+      this.logger.log(`用户 ${userId} 更新预订 ${id} 成功`);
+      return updatedReservation;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`更新预订 ${id} 失败: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    Object.assign(reservation, updateReservationDto);
-    return this.reservationsRepository.save(reservation);
   }
 
   async remove(id: number, userId: number) {
     const reservation = await this.findOne(id);
-
-    // Check if the reservation belongs to the user
     if (reservation.userId !== userId) {
-      throw new ForbiddenException(
-        'You are not authorized to delete this reservation',
-      );
+      throw new ForbiddenException('您无权删除此预订');
     }
 
-    return this.reservationsRepository.remove(reservation);
+    await this.reservationsRepository.remove(reservation);
+    this.logger.log(`用户 ${userId} 删除预订 ${id} 成功`);
   }
 }

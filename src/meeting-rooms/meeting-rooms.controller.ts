@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { MeetingRoomsService } from './meeting-rooms.service';
 import { CreateMeetingRoomDto } from './dto/create-meeting-room.dto';
@@ -33,23 +34,12 @@ export class MeetingRoomsController {
   @Roles(Role.Admin, Role.Employee)
   @Get()
   findAll(
-    @Query('page') pageString?: string,
-    @Query('limit') limitString?: string,
+    @Query('page', new ParseIntPipe({ optional: true })) page = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
     @Query('status') status?: MeetingRoomStatus,
   ) {
-    // Parse page and limit to integers
-    const page = pageString ? parseInt(pageString, 10) : undefined;
-    const limit = limitString ? parseInt(limitString, 10) : undefined;
-
-    // Validate that page and limit are positive numbers if provided
-    if (page !== undefined && (isNaN(page) || page < 1)) {
-      throw new Error('Page must be a positive number');
-    }
-
-    if (limit !== undefined && (isNaN(limit) || limit < 1)) {
-      throw new Error('Limit must be a positive number');
-    }
-
+    if (page < 1) throw new BadRequestException('页码必须大于等于1');
+    if (limit < 1) throw new BadRequestException('每页数量必须大于等于1');
     return this.meetingRoomsService.findAll({ page, limit, status });
   }
 
@@ -58,16 +48,19 @@ export class MeetingRoomsController {
   findAvailable(
     @Query('startTime') startTime: string,
     @Query('endTime') endTime: string,
-    @Query('capacity') capacityString?: string,
+    @Query('capacity', new ParseIntPipe({ optional: true })) capacity?: number,
   ) {
-    // Parse capacity to integer if provided
-    const capacity = capacityString ? parseInt(capacityString, 10) : undefined;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
 
-    return this.meetingRoomsService.findAvailableRooms(
-      new Date(startTime),
-      new Date(endTime),
-      capacity,
-    );
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('开始时间或结束时间格式无效');
+    }
+    if (end <= start) {
+      throw new BadRequestException('结束时间必须晚于开始时间');
+    }
+
+    return this.meetingRoomsService.findAvailableRooms(start, end, capacity);
   }
 
   @Roles(Role.Admin, Role.Employee)
@@ -91,6 +84,9 @@ export class MeetingRoomsController {
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: MeetingRoomStatus,
   ) {
+    if (!Object.values(MeetingRoomStatus).includes(status)) {
+      throw new BadRequestException('无效的状态值');
+    }
     return this.meetingRoomsService.updateStatus(id, status);
   }
 

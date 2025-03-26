@@ -2,6 +2,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,166 +12,172 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Role } from 'src/auth/enums/role.enum';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+  private readonly saltOrRounds: number;
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.saltOrRounds = this.configService.get<number>(
+      'BCRYPT_SALT_ROUNDS',
+      12,
+    );
+  }
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find();
   }
 
   async findOne(username: string): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { username: username },
-    });
+    const user = await this.usersRepository.findOne({ where: { username } });
     if (!user) {
-      throw new NotFoundException(`User with username: ${username} not found`);
+      throw new NotFoundException(`未找到用户 ${username}`);
     }
     return user;
   }
 
   async findOneId(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { id: id },
-    });
+    const user = await this.usersRepository.findOne({ where: { id } });
     if (!user) {
-      throw new NotFoundException(`User with ID: ${id} not found`);
+      throw new NotFoundException(`未找到 ID 为 ${id} 的用户`);
     }
     return user;
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    // Hash the password before creating the user
-    const saltOrRounds = 12;
+    const { username, email } = createUserDto;
+    if (await this.usersRepository.findOne({ where: { username } })) {
+      throw new BadRequestException(`用户名 ${username} 已存在`);
+    }
+    if (await this.usersRepository.findOne({ where: { email } })) {
+      throw new BadRequestException(`邮箱 ${email} 已存在`);
+    }
+
     const hashedPassword = await bcrypt.hash(
       createUserDto.password,
-      saltOrRounds,
+      this.saltOrRounds,
     );
-
-    // Create user with hashed password
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
     });
 
-    return this.usersRepository.save(user);
+    const savedUser = await this.usersRepository.save(user);
+    this.logger.log(`创建用户 ${username} 成功, ID: ${savedUser.id}`);
+    return savedUser;
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
-    // If password is included in the update, hash it
+    const user = await this.findOneId(id);
+
+    if (updateUserDto.username && updateUserDto.username !== user.username) {
+      if (
+        await this.usersRepository.findOne({
+          where: { username: updateUserDto.username },
+        })
+      ) {
+        throw new BadRequestException(
+          `用户名 ${updateUserDto.username} 已存在`,
+        );
+      }
+    }
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      if (
+        await this.usersRepository.findOne({
+          where: { email: updateUserDto.email },
+        })
+      ) {
+        throw new BadRequestException(`邮箱 ${updateUserDto.email} 已存在`);
+      }
+    }
+
     if (updateUserDto.password) {
-      const saltOrRounds = 12;
       updateUserDto.password = await bcrypt.hash(
         updateUserDto.password,
-        saltOrRounds,
+        this.saltOrRounds,
       );
     }
 
-    await this.usersRepository.update(id, updateUserDto);
-    return this.findOneId(id);
+    Object.assign(user, updateUserDto);
+    const updatedUser = await this.usersRepository.save(user);
+    this.logger.log(`更新用户 ${user.username} 成功, ID: ${id}`);
+    return updatedUser;
   }
 
   async remove(id: number): Promise<void> {
-    const result = await this.usersRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
+    const user = await this.findOneId(id);
+    await this.usersRepository.delete(id);
+    this.logger.log(`删除用户 ${user.username} 成功, ID: ${id}`);
   }
-  /**
-   * 获取当前用户的角色和权限
-   * @param userId 用户ID
-   * @returns 包含角色和权限的对象
-   */
+
   async getCurrentUserRoles(userId: number) {
     const user = await this.findOneId(userId);
     return {
       role: user.role,
       permissions: {
         canManageAdmins: user.role === Role.SuperAdmin,
-        canManageUsers:
-          user.role === Role.SuperAdmin || user.role === Role.Admin,
+        canManageUsers: [Role.SuperAdmin, Role.Admin].includes(user.role),
       },
     };
   }
 
-  /**
-   * 设置用户角色
-   * @param currentUserId 当前操作用户ID
-   * @param targetUserId 目标用户ID
-   * @param newRole 新角色
-   * @returns 更新后的用户对象
-   */
   async setUserRole(
     currentUserId: number,
     targetUserId: number,
     newRole: Role,
   ): Promise<User> {
-    // 获取当前用户以检查权限
     const currentUser = await this.findOneId(currentUserId);
-
-    // 获取目标用户以更新
     const targetUser = await this.findOneId(targetUserId);
 
-    // 基于角色层级检查权限
-    if (currentUser.role !== Role.SuperAdmin && newRole === Role.SuperAdmin) {
-      throw new ForbiddenException('只有超级管理员可以分配超级管理员角色');
+    // 统一权限检查
+    if (currentUser.role !== Role.SuperAdmin) {
+      if (
+        newRole === Role.SuperAdmin ||
+        targetUser.role === Role.SuperAdmin ||
+        targetUser.role === Role.Admin
+      ) {
+        throw new ForbiddenException(
+          '只有超级管理员可以修改超级管理员或管理员角色',
+        );
+      }
+      if (newRole === Role.Admin) {
+        throw new ForbiddenException('管理员不能创建其他管理员');
+      }
     }
 
-    if (
-      currentUser.role !== Role.SuperAdmin &&
-      targetUser.role === Role.SuperAdmin
-    ) {
-      throw new ForbiddenException('超级管理员角色不能被其他用户修改');
-    }
-
-    if (
-      currentUser.role !== Role.SuperAdmin &&
-      targetUser.role === Role.Admin
-    ) {
-      throw new ForbiddenException('管理员角色只能由超级管理员修改');
-    }
-
-    if (currentUser.role === Role.Admin && newRole === Role.Admin) {
-      throw new ForbiddenException('管理员用户不能创建其他管理员用户');
-    }
-
-    // 更新用户角色
     targetUser.role = newRole;
-    return this.usersRepository.save(targetUser);
+    const updatedUser = await this.usersRepository.save(targetUser);
+    this.logger.log(
+      `用户 ${currentUser.username} 将 ${targetUser.username} 角色设置为 ${newRole}`,
+    );
+    return updatedUser;
   }
 
-  /**
-   * 移除管理员角色
-   * @param currentUserId 当前操作用户ID
-   * @param targetUserId 目标用户ID
-   * @returns 更新后的用户对象
-   */
   async removeAdminRole(
     currentUserId: number,
     targetUserId: number,
   ): Promise<User> {
-    // 获取当前用户以检查权限
     const currentUser = await this.findOneId(currentUserId);
-
-    // 获取目标用户以更新
     const targetUser = await this.findOneId(targetUserId);
 
-    // 检查目标用户是否为管理员
     if (targetUser.role !== Role.Admin) {
-      throw new ForbiddenException('目标用户不是管理员');
+      throw new BadRequestException('目标用户不是管理员');
     }
-
-    // 基于角色层级检查权限
     if (currentUser.role !== Role.SuperAdmin) {
       throw new ForbiddenException('只有超级管理员可以移除管理员角色');
     }
 
-    // 将用户角色更新为普通员工
     targetUser.role = Role.Employee;
-    return this.usersRepository.save(targetUser);
+    const updatedUser = await this.usersRepository.save(targetUser);
+    this.logger.log(
+      `用户 ${currentUser.username} 移除 ${targetUser.username} 的管理员角色`,
+    );
+    return updatedUser;
   }
 }

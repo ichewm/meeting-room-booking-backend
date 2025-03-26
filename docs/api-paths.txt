@@ -1,0 +1,29 @@
+认证
+- POST /api/auth/login
+
+用户管理
+- GET /api/users
+- GET /api/users/:id
+- POST /api/users
+- PATCH /api/users/:id
+- DELETE /api/users/:id
+- GET /api/users/me/roles
+
+角色管理
+- PATCH /api/users/:id/role
+- DELETE /api/users/:id/admin-role
+
+会议室管理
+- GET /api/meeting-rooms
+- GET /api/meeting-rooms/:id
+- POST /api/meeting-rooms
+- PATCH /api/meeting-rooms/:id
+- DELETE /api/meeting-rooms/:id
+
+预订管理
+- GET /api/reservations
+- GET /api/reservations/user
+- GET /api/reservations/:id
+- POST /api/reservations
+- PATCH /api/reservations/:id
+- DELETE /api/reservations/:id

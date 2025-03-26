@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -9,7 +10,6 @@ import { MeetingRoom, MeetingRoomStatus } from './entities/meeting-room.entity';
 import { CreateMeetingRoomDto } from './dto/create-meeting-room.dto';
 import { UpdateMeetingRoomDto } from './dto/update-meeting-room.dto';
 
-// Define paginated response interface
 export interface PaginatedResponse<T> {
   items: T[];
   meta: {
@@ -22,6 +22,8 @@ export interface PaginatedResponse<T> {
 
 @Injectable()
 export class MeetingRoomsService {
+  private readonly logger = new Logger(MeetingRoomsService.name);
+
   constructor(
     @InjectRepository(MeetingRoom)
     private meetingRoomRepository: Repository<MeetingRoom>,
@@ -30,8 +32,19 @@ export class MeetingRoomsService {
   async create(
     createMeetingRoomDto: CreateMeetingRoomDto,
   ): Promise<MeetingRoom> {
+    const existingRoom = await this.meetingRoomRepository.findOneBy({
+      name: createMeetingRoomDto.name,
+    });
+    if (existingRoom) {
+      throw new BadRequestException(
+        `会议室名称 ${createMeetingRoomDto.name} 已存在`,
+      );
+    }
+
     const newRoom = this.meetingRoomRepository.create(createMeetingRoomDto);
-    return this.meetingRoomRepository.save(newRoom);
+    const savedRoom = await this.meetingRoomRepository.save(newRoom);
+    this.logger.log(`创建会议室 ${savedRoom.name} 成功，ID: ${savedRoom.id}`);
+    return savedRoom;
   }
 
   async findAll(query?: {
@@ -39,20 +52,9 @@ export class MeetingRoomsService {
     limit?: number;
     status?: MeetingRoomStatus;
   }): Promise<PaginatedResponse<MeetingRoom>> {
-    // Ensure default values and type safety
-    const page = query?.page && Number.isInteger(query.page) ? query.page : 1;
-    const limit =
-      query?.limit && Number.isInteger(query.limit) ? query.limit : 10;
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
     const status = query?.status;
-
-    // Extra validation to ensure skip value will be a number
-    if (isNaN(page) || page < 1) {
-      throw new BadRequestException('Page must be a positive number');
-    }
-
-    if (isNaN(limit) || limit < 1) {
-      throw new BadRequestException('Limit must be a positive number');
-    }
 
     const queryBuilder = this.meetingRoomRepository
       .createQueryBuilder('room')
@@ -62,28 +64,14 @@ export class MeetingRoomsService {
       queryBuilder.andWhere('room.status = :status', { status });
     }
 
-    // Get total count
     const total = await queryBuilder.getCount();
-
-    // Apply pagination with explicit number conversion
-    const skipValue = (page - 1) * limit;
-    queryBuilder.skip(skipValue).take(limit);
-
-    // Get data
+    queryBuilder.skip((page - 1) * limit).take(limit);
     const items = await queryBuilder.getMany();
 
-    // Calculate total pages
     const totalPages = Math.ceil(total / limit);
-
-    // Return response with pagination metadata
     return {
       items,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-      },
+      meta: { total, page, limit, totalPages },
     };
   }
 
@@ -92,11 +80,9 @@ export class MeetingRoomsService {
       where: { id, isActive: true },
       relations: ['reservations'],
     });
-
     if (!room) {
-      throw new NotFoundException(`Meeting room with ID ${id} not found`);
+      throw new NotFoundException(`未找到 ID 为 ${id} 的会议室`);
     }
-
     return room;
   }
 
@@ -105,19 +91,28 @@ export class MeetingRoomsService {
     updateMeetingRoomDto: UpdateMeetingRoomDto,
   ): Promise<MeetingRoom> {
     const room = await this.findOne(id);
+    if (updateMeetingRoomDto.name && updateMeetingRoomDto.name !== room.name) {
+      const existingRoom = await this.meetingRoomRepository.findOneBy({
+        name: updateMeetingRoomDto.name,
+      });
+      if (existingRoom) {
+        throw new BadRequestException(
+          `会议室名称 ${updateMeetingRoomDto.name} 已存在`,
+        );
+      }
+    }
 
-    // Update the room properties
     Object.assign(room, updateMeetingRoomDto);
-
-    return this.meetingRoomRepository.save(room);
+    const updatedRoom = await this.meetingRoomRepository.save(room);
+    this.logger.log(`更新会议室 ${updatedRoom.name} 成功，ID: ${id}`);
+    return updatedRoom;
   }
 
   async remove(id: number): Promise<void> {
     const room = await this.findOne(id);
-
-    // Soft delete by setting isActive to false
     room.isActive = false;
     await this.meetingRoomRepository.save(room);
+    this.logger.log(`删除会议室 ${room.name} 成功，ID: ${id}`);
   }
 
   async findAvailableRooms(
@@ -125,7 +120,6 @@ export class MeetingRoomsService {
     endTime: Date,
     capacity?: number,
   ): Promise<MeetingRoom[]> {
-    // Base query for active rooms
     const query = this.meetingRoomRepository
       .createQueryBuilder('room')
       .where('room.isActive = :isActive', { isActive: true })
@@ -133,16 +127,10 @@ export class MeetingRoomsService {
         status: MeetingRoomStatus.AVAILABLE,
       });
 
-    // Add capacity filter if provided
     if (capacity !== undefined) {
-      // Ensure capacity is a number
-      if (isNaN(capacity) || capacity < 0) {
-        throw new BadRequestException('Capacity must be a non-negative number');
-      }
       query.andWhere('room.capacity >= :capacity', { capacity });
     }
 
-    // Add reservation check to find available rooms
     query.leftJoin('room.reservations', 'reservation').andWhere(
       `
         (reservation.id IS NULL) OR 
@@ -157,13 +145,14 @@ export class MeetingRoomsService {
     return query.getMany();
   }
 
-  // Add method to update meeting room status
   async updateStatus(
     id: number,
     status: MeetingRoomStatus,
   ): Promise<MeetingRoom> {
     const room = await this.findOne(id);
     room.status = status;
-    return this.meetingRoomRepository.save(room);
+    const updatedRoom = await this.meetingRoomRepository.save(room);
+    this.logger.log(`更新会议室 ${room.name} 状态为 ${status}，ID: ${id}`);
+    return updatedRoom;
   }
 }
