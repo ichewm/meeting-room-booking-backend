@@ -6,11 +6,13 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    container_name: meeting-room-booking-backend
     env_file: .env
     environment:
-      - PORT=3001
+      DB_HOST: mysql                     
+      DB_PORT: 3306
     depends_on:
-      db:
+      mysql:
         condition: service_healthy
     ports:
       - "3001:3001"
@@ -35,28 +37,48 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  db:
-    image: mysql:8.0
-    env_file: .env
-    ports:
-      - "3306:3306"
+  mysql:
+    image: mysql:8.0.0
+    restart: always
+    container_name: meeting-room-booking-db
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MYSQL_DATABASE: ${DB_DATABASE:-meeting-room-booking}
+      MYSQL_USER: ${DB_USERNAME:-room_user}
+      MYSQL_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_root_password
+      - db_password
+    networks:
+      - webnet
     volumes:
-      - mysql_data:/var/lib/mysql
-    command: >
-      --default-authentication-plugin=mysql_native_password
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-    restart: unless-stopped
+      - meeting_room_booking_db:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=$$(cat /run/secrets/db_root_password)"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
-
-volumes:
-  mysql_data:
+      retries: 5
+      start_period: 30s
 
 networks:
   webnet:
     driver: bridge
+
+volumes:
+  meeting_room_booking_db:
+    driver: local
+
+secrets:
+  db_root_password:
+    file: ./secrets/db_root_password.txt
+  db_password:
+    file: ./secrets/db_password.txt

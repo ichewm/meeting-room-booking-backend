@@ -5,16 +5,17 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # 复制 package.json 和 package-lock.json
-COPY package*.json ./
+COPY package*.json yarn.lock ./
 
 # 安装依赖
-RUN npm install
+RUN yarn install --frozen-lockfile
 
 # 复制源代码
 COPY . .
 
+RUN npm run rebuild
 # 构建应用
-RUN npm run build
+RUN yarn build
 
 # 生产阶段
 FROM node:22-alpine
@@ -39,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -q --spider http://localhost:3001/api/health || exit 1
 
 # 启动应用
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main"]
