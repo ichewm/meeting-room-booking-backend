@@ -8,8 +8,7 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     environment:
-      DB_HOST: db                     
-      DB_PORT: 3306
+      - PORT=3001
     depends_on:
       db:
         condition: service_healthy
@@ -38,11 +37,7 @@ services:
 
   db:
     image: mysql:8.0
-    environment:
-      - MYSQL_DATABASE=meeting_room_booking
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=example
-      - MYSQL_ROOT_PASSWORD=example
+    env_file: .env
     ports:
       - "3306:3306"
     volumes:
@@ -53,7 +48,7 @@ services:
       --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pexample"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 30s
       timeout: 10s
       retries: 3
