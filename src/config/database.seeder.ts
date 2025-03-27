@@ -51,10 +51,11 @@ export class DatabaseSeeder implements OnModuleInit {
       }
 
       // Hash the password
-      const salt = await bcrypt.genSalt(
-        this.configService.get<number>('BCRYPT_SALT_ROUNDS', 12),
+      const saltOrRounds = parseInt(
+        this.configService.get<string>('BCRYPT_SALT_ROUNDS', '12'),
+        12,
       );
-      const password = await bcrypt.hash(rawPassword, salt);
+      const password = await bcrypt.hash(rawPassword, saltOrRounds);
 
       // Create the SuperAdmin user
       const superAdmin = this.usersRepository.create({

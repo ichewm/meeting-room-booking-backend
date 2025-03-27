@@ -4,16 +4,13 @@ import {
   Column,
   OneToMany,
   CreateDateColumn,
-  UpdateDateColumn,
-  Index,
+  UpdateDateColumn
 } from 'typeorm';
 import { Reservation } from '../../reservations/entities/reservation.entity';
 import { Exclude } from 'class-transformer';
 import { Role } from '../../auth/enums/role.enum';
 
 @Entity()
-@Index(['username']) // 为常用查询字段添加索引
-@Index(['email'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
