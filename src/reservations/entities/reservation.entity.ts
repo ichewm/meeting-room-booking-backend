@@ -25,10 +25,16 @@ export class Reservation {
   @Column({ nullable: true, comment: '预订描述' })
   description: string;
 
-  @Column({ type: 'timestamp', comment: '开始时间' })
+  @Column({
+    type: 'datetime',
+    comment: '开始时间',
+  })
   startTime: Date;
 
-  @Column({ type: 'timestamp', comment: '结束时间' })
+  @Column({
+    type: 'datetime',
+    comment: '结束时间',
+  })
   endTime: Date;
 
   @Column({ comment: '用户 ID' })
